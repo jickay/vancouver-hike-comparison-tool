@@ -1,0 +1,1733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vancouver Hike Profiles Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom Scrollbar for dark theme */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4B5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6B7280; }
+        .scrollable { scrollbar-width: thin; scrollbar-color: #4B5563 transparent; }
+
+        /* Custom Checkbox Color */
+        input[type="checkbox"]:checked {
+            background-color: #3B82F6;
+            border-color: #3B82F6;
+        }
+
+        /* Number input hide arrows */
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+    </style>
+</head>
+<body class="flex flex-col md:flex-row h-screen bg-gray-900 text-gray-200 overflow-hidden">
+
+    <!-- Visualizer Container -->
+    <main class="flex-1 relative flex flex-col h-2/3 md:h-full min-h-0">
+        
+        <!-- Modern HTML Region and Area Filter Panel -->
+        <div id="filterRegionPanel" class="bg-gray-950 border-b border-gray-800 p-3 shrink-0 select-none z-30">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+                <div>
+                    <h1 class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                        </svg>
+                        Vancouver Hike Profile Visualizer
+                    </h1>
+                    <p class="text-[9px] sm:text-[10px] text-gray-400 mt-0.5">
+                        Toggle regions or individual areas to filter trails. Select paths to plot on the multi-dimensional effort canvas.
+                    </p>
+                </div>
+                <div class="flex gap-2 shrink-0">
+                    <button id="toggleAllOnBtn" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-[10px] font-semibold text-gray-200 rounded border border-gray-700 hover:border-gray-600 transition-colors">
+                        Show All
+                    </button>
+                    <button id="toggleAllOffBtn" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-[10px] font-semibold text-gray-200 rounded border border-gray-700 hover:border-gray-600 transition-colors">
+                        Hide All
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Dynamic Filters Flex Grid Wrapper -->
+            <div id="regionFilters" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2 max-h-48 sm:max-h-none overflow-y-auto">
+                <!-- Injected dynamically via JS based on current active dataset -->
+            </div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="flex-1 relative min-h-0">
+            <canvas id="vizCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+            
+            <!-- Hover Tooltip -->
+            <div id="tooltip" class="absolute pointer-events-none opacity-0 bg-gray-800 border border-gray-600 rounded p-3 shadow-2xl transition-opacity duration-150 z-30" style="min-width: 220px;"></div>
+        </div>
+    </main>
+
+    <!-- Side Control Panel -->
+    <aside class="w-full md:w-80 lg:w-96 bg-gray-800 border-t md:border-t-0 md:border-l border-gray-700 flex flex-col h-1/3 md:h-full z-20 shadow-2xl shrink-0 min-h-0">
+        
+        <!-- View Tabs -->
+        <div class="flex border-b border-gray-700 bg-gray-900 shrink-0">
+            <button id="tabExplore" onclick="switchTab('explore')" class="flex-1 py-3 text-sm font-semibold text-white border-b-2 border-blue-500 bg-gray-800 transition-colors focus:outline-none">Explore</button>
+            <button id="tabManage" onclick="switchTab('manage')" class="flex-1 py-3 text-sm font-semibold text-gray-400 border-b-2 border-transparent hover:text-white transition-colors focus:outline-none">Manage Trails</button>
+        </div>
+
+        <!-- Shared / Unified Filter Logic Wrapper -->
+        <!-- ================= EXPLORE VIEW ================= -->
+        <div id="exploreView" class="flex flex-col flex-1 min-h-0">
+            <!-- Search & Sort Controls -->
+            <div class="p-3 border-b border-gray-700 shrink-0 flex flex-col gap-2 bg-gray-900/40">
+                <div class="relative w-full">
+                    <input type="text" id="searchInput" placeholder="Search trail names..." class="w-full bg-gray-900 text-white text-sm rounded pl-8 pr-3 py-2 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
+                    <svg class="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+
+            <!-- Pace & Time Estimator -->
+            <div class="p-3 border-b border-gray-700 bg-gray-900/40 shrink-0 space-y-2">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-xs uppercase font-semibold text-gray-400 tracking-wider">
+                        Pace Benchmark
+                    </h3>
+                </div>
+                <div class="grid grid-cols-12 gap-2 items-end">
+                    <!-- Pace Multiplier Input -->
+                    <div class="col-span-4">
+                        <label class="block text-[10px] text-gray-400 mb-1 leading-none">Pace (by Effort)</label>
+                        <input type="number" id="paceMinutes" value="0.85" step="0.01" min="0.1" class="w-full bg-gray-900 text-white text-xs rounded p-2 border border-gray-600 focus:border-blue-500 outline-none">
+                    </div>
+                    <!-- Auto Calibration selection -->
+                    <div class="col-span-5">
+                        <label class="block text-[10px] text-gray-400 mb-1 leading-none">Benchmark Trail</label>
+                        <select id="calibrateHikeSelect" class="w-full bg-gray-900 text-white text-[11px] rounded p-2 border border-gray-600 outline-none cursor-pointer">
+                            <option value="">Choose Trail...</option>
+                            <!-- populated dynamically -->
+                        </select>
+                    </div>
+                    <!-- Calibration Time Input -->
+                    <div class="col-span-3">
+                        <label class="block text-[10px] text-gray-400 mb-1 leading-none">Time (h)</label>
+                        <input type="number" id="calibrateHours" step="0.1" min="0.1" placeholder="e.g. 4" class="w-full bg-gray-900 text-white text-xs rounded p-2 border border-gray-600 focus:border-blue-500 outline-none">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Filters (Grid) -->
+            <div class="p-3 border-b border-gray-700 bg-gray-800/50 shrink-0">
+                <h3 class="text-xs uppercase font-semibold text-gray-400 mb-2 tracking-wider flex">
+                    <span>Property Filters</span>
+                    <span id="filterCount" class="bg-gray-600 text-white px-2 py-0.5 ml-1 rounded-full text-[11px]">0 found</span>
+                </h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <select id="filter-type" class="bg-gray-700 text-xs text-white p-1.5 rounded border border-gray-600 outline-none"><option value="">Type: All</option></select>
+                    <select id="filter-distance" class="bg-gray-700 text-xs text-white p-1.5 rounded border border-gray-600 outline-none"><option value="">Distance (km): All</option></select>
+                    <select id="filter-elevation" class="bg-gray-700 text-xs text-white p-1.5 rounded border border-gray-600 outline-none"><option value="">Elevation (m): All</option></select>
+                    <select id="filter-hypotenuse" class="bg-gray-700 text-xs text-white p-1.5 rounded border border-gray-600 outline-none"><option value="">Climb (km): All</option></select>
+                    <select id="filter-angle" class="bg-gray-700 text-xs text-white p-1.5 rounded border border-gray-600 outline-none"><option value="">Angle (&deg;): All</option></select>
+                    <select id="filter-score" class="bg-gray-700 text-xs text-white p-1.5 rounded border border-gray-600 outline-none"><option value="">Effort: All</option></select>
+                </div>
+            </div>
+
+            <!-- Selectable List -->
+            <div class="flex">
+                <select id="sortSelect" class="flex-1 bg-gray-700 text-xs text-white p-2 border border-gray-600 outline-none cursor-pointer">
+                    <option value="name">Sort by: Name</option>
+                    <option value="area">Sort by: Area</option>
+                    <option value="distance">Sort by: Distance</option>
+                    <option value="elevation">Sort by: Elevation</option>
+                    <option value="angle">Sort by: Angle</option>
+                    <option value="score">Sort by: Effort</option>
+                    <option value="time">Sort by: Est. Time</option>
+                </select>
+                <button id="sortOrderBtn" class="bg-gray-900 hover:bg-gray-600 text-white p-2 border border-gray-600 flex items-center justify-center w-10 shrink-0 transition-colors" title="Toggle Sort Direction">
+                    <span id="sortDirectionIcon" class="text-sm font-bold">↓</span>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2 space-y-1 scrollable" id="hikeList">
+                <!-- Dynamic Items Populate Here -->
+            </div>
+
+            <!-- Export Action -->
+            <div class="p-3 border-t border-gray-700 bg-gray-800 shrink-0">
+                <button id="exportBtn" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium text-sm transition-colors flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Export Image
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= MANAGE VIEW ================= -->
+        <div id="manageView" class="hidden flex flex-col flex-1 min-h-0">
+            <!-- Form for Adding / Editing -->
+            <div class="p-3 border-b border-gray-700 bg-gray-800/50 shrink-0 overflow-y-auto max-h-80">
+                <h3 class="text-sm font-bold text-white mb-2 flex items-center justify-between">
+                    <span id="formTitle">Add New Trail</span>
+                    <button type="button" id="cancelEditBtn" class="hidden text-xs text-gray-400 hover:text-white transition-colors" onclick="resetForm()">Cancel Edit</button>
+                </h3>
+                <form id="trailForm" class="space-y-2">
+                    <input type="hidden" id="trailId">
+                    
+                    <div>
+                        <label class="block text-[10px] text-gray-400 mb-0.5">Name</label>
+                        <input type="text" id="trailName" required placeholder="e.g., Grouse Grind" class="w-full bg-gray-900 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 outline-none">
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <div class="flex-1">
+                            <label class="block text-[10px] text-gray-400 mb-0.5">Distance (km)</label>
+                            <input type="number" step="0.1" min="0" id="trailDistance" required placeholder="2.9" class="w-full bg-gray-900 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 outline-none">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-[10px] text-gray-400 mb-0.5">Elevation Gain (m)</label>
+                            <input type="number" step="1" min="0" id="trailElevation" required placeholder="853" class="w-full bg-gray-900 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 outline-none">
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-2">
+                        <div class="flex-1">
+                            <label class="block text-[10px] text-gray-400 mb-0.5">Area</label>
+                            <select id="trailArea" required class="w-full bg-gray-900 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 outline-none">
+                                <!-- Populated dynamically based on standard color key -->
+                            </select>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-[10px] text-gray-400 mb-0.5">Type</label>
+                            <select id="trailType" required class="w-full bg-gray-900 text-white text-xs rounded px-2 py-1.5 border border-gray-600 focus:border-blue-500 outline-none">
+                                <option value="Out & Back">Out & Back</option>
+                                <option value="Loop">Loop</option>
+                                <option value="Point-to-Point">Point-to-Point</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="w-full mt-1 bg-blue-600 hover:bg-blue-500 text-white py-1.5 rounded font-medium text-xs transition-colors">
+                        Save Trail
+                    </button>
+                </form>
+            </div>
+
+            <!-- Manage Controls (Search & Sort) -->
+            <div class="p-3 border-b border-gray-700 bg-gray-900/50 shrink-0">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-xs uppercase font-semibold text-gray-400 tracking-wider">
+                        Search & Sort Database
+                    </h3>
+                    <span id="manageFilterCount" class="bg-gray-600 text-white px-2 py-0.5 rounded-full text-[10px]">0</span>
+                </div>
+                <!-- Search & Sort Layout -->
+                <div class="space-y-2">
+                    <div class="relative w-full">
+                        <input type="text" id="manageSearchInput" placeholder="Search manageable..." class="w-full bg-gray-900 text-white text-xs rounded pl-8 pr-3 py-1.5 border border-gray-600 focus:border-blue-500 focus:outline-none transition-colors">
+                        <svg class="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <!-- Sorting widgets -->
+                    <div class="flex">
+                        <select id="manageSortSelect" class="flex-1 bg-gray-700 text-xs text-white p-1.5 rounded-l border border-gray-600 outline-none cursor-pointer">
+                            <option value="name">Sort by: Name</option>
+                            <option value="area">Sort by: Area</option>
+                            <option value="distance">Sort by: Distance</option>
+                            <option value="elevation">Sort by: Elevation</option>
+                            <option value="angle">Sort by: Angle</option>
+                            <option value="score">Sort by: Effort</option>
+                        </select>
+                        <button id="manageSortOrderBtn" class="bg-gray-900 hover:bg-gray-600 text-white p-1.5 border-t border-b border-r border-gray-600 rounded-r flex items-center justify-center w-10 shrink-0 transition-colors" title="Toggle Sort Direction">
+                            <span id="manageSortDirectionIcon" class="text-xs font-bold">↓</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Editable List -->
+            <div class="flex-1 overflow-y-auto p-2 space-y-1 scrollable" id="manageHikeList">
+                <!-- List of editable trails -->
+            </div>
+
+            <!-- CSV Actions Panel -->
+            <div class="p-3 border-t border-gray-700 bg-gray-900 shrink-0 space-y-2">
+                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider">CSV Data Exchange</div>
+                <div class="flex gap-2">
+                    <button id="exportCsvBtn" class="flex-1 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded font-medium text-xs transition-colors flex items-center justify-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        Export CSV
+                    </button>
+                    <label for="importCsvFile" class="flex-1 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-center">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        Import CSV
+                    </label>
+                    <input type="file" id="importCsvFile" accept=".csv" class="hidden">
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Custom Modal for Notifications instead of alerts -->
+    <div id="customModal" class="fixed inset-0 bg-black/60 z-50 flex items-center justify-center hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-5 max-w-md w-full mx-4 shadow-2xl">
+            <h3 id="modalTitle" class="text-lg font-bold text-white mb-2">Notice</h3>
+            <p id="modalBody" class="text-sm text-gray-300 mb-5 leading-relaxed"></p>
+            <div class="flex justify-end gap-3">
+                <button id="modalSecondaryBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors hidden"></button>
+                <button id="modalPrimaryBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded font-semibold transition-colors">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initial Dataset
+        let hikes = [
+            { id: 1, name: "Black Mountain and Eagle Bluffs", area: "Cypress", type: "Loop", distance: 8.2, elevation: 430 },
+            { id: 2, name: "St. Mark's Summit", area: "Cypress", type: "In and Out", distance: 11.0, elevation: 460 },
+            { id: 3, name: "Unnecessary Mountain", area: "Cypress", type: "In and Out", distance: 15.4, elevation: 1020 },
+            { id: 4, name: "Mt. Elsay", area: "Cypress", type: "In and Out", distance: 15.8, elevation: 1250 },
+            { id: 5, name: "Hollyburn Mountain", area: "Cypress", type: "In and Out", distance: 6.8, elevation: 450 },
+            { id: 6, name: "Bowen Lookout", area: "Cypress", type: "In and Out", distance: 4.2, elevation: 110 },
+            { id: 7, name: "Cypress Falls", area: "West Vancouver", type: "In and Out", distance: 2.8, elevation: 130 },
+            { id: 8, name: "Lighthouse Park Trail", area: "West Vancouver", type: "Loop", distance: 5.7, elevation: 120 },
+            { id: 9, name: "Whyte Lake", area: "West Vancouver", type: "In and Out", distance: 5.2, elevation: 160 },
+            { id: 10, name: "Capilano Pacific Trail", area: "West Vancouver", type: "Point to Point", distance: 7.4, elevation: 230 },
+            { id: 11, name: "Eagleridge Bluffs via Baden Powell", area: "Cypress", type: "In and Out", distance: 8.9, elevation: 830 },
+            { id: 12, name: "Mt. Strachan", area: "Cypress", type: "Loop", distance: 10.3, elevation: 550 },
+            { id: 13, name: "Grouse Grind", area: "Grouse", type: "In and Out", distance: 2.5, elevation: 850 },
+            { id: 14, name: "BCMC Trail", area: "Grouse", type: "In and Out", distance: 2.9, elevation: 850 },
+            { id: 15, name: "Crown Mountain", area: "Grouse", type: "In and Out", distance: 9.6, elevation: 1100 },
+            { id: 16, name: "Goat Mountain", area: "Grouse", type: "In and Out", distance: 7.8, elevation: 830 },
+            { id: 17, name: "Dam Mountain", area: "Grouse", type: "Loop", distance: 4.8, elevation: 260 },
+            { id: 18, name: "Thunderbird Ridge", area: "Grouse", type: "In and Out", distance: 5.8, elevation: 290 },
+            { id: 19, name: "Lynn Peak", area: "Lynn Valley", type: "In and Out", distance: 8.8, elevation: 720 },
+            { id: 20, name: "Lynn Canyon Suspension Bridge and 30 Foot Pool", area: "Lynn Valley", type: "Loop", distance: 2.4, elevation: 70 },
+            { id: 21, name: "Norvan Falls", area: "Lynn Valley", type: "In and Out", distance: 14.2, elevation: 200 },
+            { id: 22, name: "Coliseum Mountain", area: "Lynn Valley", type: "In and Out", distance: 22.6, elevation: 1250 },
+            { id: 23, name: "Hanes Valley Loop", area: "Lynn Valley", type: "Loop", distance: 16.4, elevation: 1320 },
+            { id: 24, name: "Kennedy Falls and Big Cedar", area: "Lynn Valley", type: "In and Out", distance: 9.8, elevation: 150 },
+            { id: 25, name: "Rice Lake Loop", area: "Lynn Valley", type: "Loop", distance: 2.8, elevation: 30 },
+            { id: 26, name: "Twin Falls Trail", area: "Lynn Valley", type: "Loop", distance: 1.6, elevation: 70 },
+            { id: 27, name: "Dog Mountain", area: "Seymour", type: "In and Out", distance: 4.8, elevation: 150 },
+            { id: 28, name: "Mount Seymour First Peak", area: "Seymour", type: "In and Out", distance: 8.8, elevation: 450 },
+            { id: 29, name: "Mount Seymour Third Peak", area: "Seymour", type: "In and Out", distance: 10.2, elevation: 650 },
+            { id: 30, name: "Mystery Lake", area: "Seymour", type: "In and Out", distance: 2.8, elevation: 130 },
+            { id: 31, name: "Quarry Rock", area: "Deep Cove", type: "In and Out", distance: 3.7, elevation: 100 },
+            { id: 32, name: "Deep Cove to Lynn Canyon (Baden Powell)", area: "North Vancouver", type: "Point to Point", distance: 11.8, elevation: 420 },
+            { id: 33, name: "Mount Elsay via Seymour", area: "Seymour", type: "In and Out", distance: 15.8, elevation: 1310 },
+            { id: 34, name: "Goldie Lake Loop", area: "Seymour", type: "Loop", distance: 3.4, elevation: 100 },
+            { id: 35, name: "De Pencier Bluffs", area: "Seymour", type: "Loop", distance: 5.8, elevation: 320 },
+            { id: 36, name: "Burnaby Mountain Velodrome Trail", area: "Burnaby", type: "In and Out", distance: 2.8, elevation: 240 },
+            { id: 37, name: "Burnaby Mountain Mountain House Trail", area: "Burnaby", type: "Loop", distance: 5.4, elevation: 210 },
+            { id: 38, name: "Stanley Park Seawall", area: "Vancouver", type: "Loop", distance: 10.1, elevation: 10 },
+            { id: 39, name: "Pacific Spirit Regional Park Park-To-Park Trail", area: "Vancouver", type: "Loop", distance: 8.4, elevation: 80 },
+            { id: 40, name: "Iona Beach Regional Park Jetty Trail", area: "Richmond", type: "In and Out", distance: 8.1, elevation: 10 },
+            { id: 41, name: "Deer Lake Park Trail", area: "Burnaby", type: "Loop", distance: 4.8, elevation: 30 },
+            { id: 42, name: "Burnaby Lake Loop", area: "Burnaby", type: "Loop", distance: 9.6, elevation: 20 },
+            { id: 43, name: "Diez Vistas", area: "Anmore / Buntzen", type: "Loop", distance: 14.8, elevation: 460 },
+            { id: 44, name: "Buntzen Lake Reservoir Trail", area: "Anmore / Buntzen", type: "Loop", distance: 9.8, elevation: 110 },
+            { id: 45, name: "Eagle Mountain (Eagle Ridge)", area: "Coquitlam", type: "In and Out", distance: 14.6, elevation: 1120 },
+            { id: 46, name: "Lindsay Lake Loop", area: "Anmore / Buntzen", type: "Loop", distance: 14.8, elevation: 1020 },
+            { id: 47, name: "Swan Falls Loop", area: "Anmore / Buntzen", type: "Loop", distance: 17.6, elevation: 1150 },
+            { id: 48, name: "High Knoll Trail (Minnekhada)", area: "Coquitlam", type: "Loop", distance: 4.8, elevation: 120 },
+            { id: 49, name: "Coquitlam Crag", area: "Coquitlam", type: "In and Out", distance: 11.4, elevation: 780 },
+            { id: 50, name: "Woodland Walk Trail", area: "Coquitlam", type: "Loop", distance: 7.8, elevation: 280 },
+            { id: 51, name: "Crystal Falls", area: "Coquitlam", type: "In and Out", distance: 6.8, elevation: 40 },
+            { id: 52, name: "Jug Island Beach", area: "Belcarra", type: "In and Out", distance: 5.4, elevation: 100 },
+            { id: 53, name: "Admiralty Point Trail", area: "Belcarra", type: "In and Out", distance: 4.8, elevation: 50 },
+            { id: 54, name: "Saskamat Lake Loop", area: "Belcarra", type: "Loop", distance: 3.1, elevation: 40 },
+            { id: 55, name: "Dilly Dally Loop", area: "Anmore / Buntzen", type: "Loop", distance: 24.6, elevation: 1260 },
+            { id: 56, name: "Dennett Lake via Munro Lake", area: "Coquitlam", type: "In and Out", distance: 12.8, elevation: 950 },
+            { id: 57, name: "Burke Mountain (Pinetree Trail)", area: "Coquitlam", type: "In and Out", distance: 9.4, elevation: 610 },
+            { id: 58, name: "Golden Ears Summit", area: "Golden Ears / Maple Ridge", type: "In and Out", distance: 23.8, elevation: 1500 },
+            { id: 59, name: "Evans Peak", area: "Golden Ears / Maple Ridge", type: "In and Out", distance: 9.8, elevation: 950 },
+            { id: 60, name: "Alouette Mountain", area: "Golden Ears / Maple Ridge", type: "In and Out", distance: 19.6, elevation: 1150 },
+            { id: 61, name: "Gold Creek Falls", area: "Golden Ears / Maple Ridge", type: "In and Out", distance: 5.4, elevation: 80 },
+            { id: 62, name: "Lower Falls Trail to Upper Falls", area: "Golden Ears / Maple Ridge", type: "In and Out", distance: 6.8, elevation: 160 },
+            { id: 63, name: "Mike Lake Trail", area: "Golden Ears / Maple Ridge", type: "Loop", distance: 1.9, elevation: 40 },
+            { id: 64, name: "Menzies Trail", area: "Golden Ears / Maple Ridge", type: "Point to Point", distance: 8.8, elevation: 250 },
+            { id: 65, name: "Kanaka Creek Cliff Falls", area: "Golden Ears / Maple Ridge", type: "Loop", distance: 3.8, elevation: 90 },
+            { id: 67, name: "Elk Mountain", area: "Chilliwack", type: "In and Out", distance: 6.8, elevation: 800 },
+            { id: 68, name: "Mount Cheam", area: "Chilliwack", type: "In and Out", distance: 9.4, elevation: 700 },
+            { id: 69, name: "Lindeman Lake", area: "Chilliwack", type: "In and Out", distance: 3.4, elevation: 200 },
+            { id: 70, name: "Greendrop Lake", area: "Chilliwack", type: "In and Out", distance: 10.8, elevation: 440 },
+            { id: 71, name: "Flora Peak", area: "Chilliwack", type: "In and Out", distance: 13.8, elevation: 1330 },
+            { id: 72, name: "MacFarlane Lake and Mt. Pierce", area: "Chilliwack", type: "In and Out", distance: 16.8, elevation: 1560 },
+            { id: 73, name: "Mount Mercer", area: "Chilliwack", type: "In and Out", distance: 15.4, elevation: 1100 },
+            { id: 74, name: "Slesse Memorial Trail", area: "Chilliwack", type: "In and Out", distance: 12.8, elevation: 940 },
+            { id: 75, name: "Bridal Veil Falls", area: "Fraser Valley", type: "Loop", distance: 0.8, elevation: 50 },
+            { id: 76, name: "Abby Grind", area: "Abbotsford", type: "In and Out", distance: 3.8, elevation: 410 },
+            { id: 77, name: "Sumas Mountain Ridge Trail", area: "Abbotsford", type: "In and Out", distance: 13.4, elevation: 730 },
+            { id: 78, name: "Chadsey Lake", area: "Abbotsford", type: "Loop", distance: 6.4, elevation: 340 },
+            { id: 79, name: "Hayward Lake Reservoir Trail", area: "Mission", type: "In and Out", distance: 11.8, elevation: 150 },
+            { id: 80, name: "Steelhead Falls", area: "Mission", type: "In and Out", distance: 1.8, elevation: 70 },
+            { id: 81, name: "Hunter Road Trail (Mt. Woodside)", area: "Harrison / Kent", type: "In and Out", distance: 8.8, elevation: 560 },
+            { id: 82, name: "Stawamus Chief (Peaks 1, 2, and 3)", area: "Squamish", type: "Loop", distance: 6.8, elevation: 600 },
+            { id: 83, name: "Sea to Summit Trail", area: "Squamish", type: "In and Out", distance: 7.4, elevation: 920 },
+            { id: 84, name: "Murrin Park Loop and Jura Slads", area: "Squamish", type: "Loop", distance: 2.4, elevation: 160 },
+            { id: 85, name: "Shannon Falls", area: "Squamish", type: "In and Out", distance: 1.4, elevation: 40 },
+            { id: 86, name: "Watersprite Lake", area: "Squamish", type: "In and Out", distance: 16.8, elevation: 660 },
+            { id: 87, name: "Elfin Lakes", area: "Garibaldi", type: "In and Out", distance: 21.8, elevation: 600 },
+            { id: 88, name: "The Gargoyles", area: "Garibaldi", type: "In and Out", distance: 26.8, elevation: 1100 },
+            { id: 89, name: "Opal Cone", area: "Garibaldi", type: "In and Out", distance: 34.8, elevation: 1210 },
+            { id: 90, name: "Mamquam Falls", area: "Squamish", type: "In and Out", distance: 1.6, elevation: 40 },
+            { id: 91, name: "Brohm Lake Loop", area: "Squamish", type: "Loop", distance: 7.4, elevation: 180 },
+            { id: 92, name: "Tantalus Lookout Trail", area: "Squamish", type: "In and Out", distance: 4.8, elevation: 320 },
+            { id: 93, name: "High Falls Creek", area: "Squamish", type: "Loop", distance: 10.8, elevation: 650 },
+            { id: 94, name: "Crooked Falls", area: "Squamish", type: "In and Out", distance: 5.8, elevation: 400 },
+            { id: 95, name: "Alice Lake Loop", area: "Squamish", type: "Loop", distance: 5.8, elevation: 90 },
+            { id: 96, name: "Four Lakes Trail", area: "Squamish", type: "Loop", distance: 6.3, elevation: 120 },
+            { id: 97, name: "Smoke Bluffs Park Trail", area: "Squamish", type: "Loop", distance: 3.4, elevation: 140 },
+            { id: 98, name: "Mount Gardner (Bowen Island)", area: "Bowen Island", type: "Loop", distance: 9.8, elevation: 720 },
+            { id: 99, name: "Killarney Lake Loop", area: "Bowen Island", type: "Loop", distance: 8.8, elevation: 110 },
+            { id: 100, name: "Campbell Valley Regional Park Perimeter", area: "Langley", type: "Loop", distance: 10.8, elevation: 40 },
+            { id: 101, name: "Garibaldi Lake", area: "Garibaldi", distance: 18.0, elevation: 820, type: "Out & Back" },
+            { id: 102, name: "Panorama Ridge", area: "Garibaldi", distance: 30.0, elevation: 1520, type: "Out & Back" },
+            { id: 103, name: "Black Tusk", area: "Garibaldi", distance: 29.0, elevation: 1740, type: "Out & Back" },
+            { id: 104, name: "Elfin Lakes", area: "Garibaldi", distance: 22.0, elevation: 600, type: "Out & Back" },
+            { id: 105, name: "Wedgemount Lake", area: "Garibaldi", distance: 12.2, elevation: 1200, type: "Out & Back" }
+        ];
+
+        // Region definitions for grouping and flow layout
+        const regions = [
+            {
+                name: "North Shore West",
+                areas: ["Cypress", "West Vancouver", "Bowen Island"]
+            },
+            {
+                name: "North Shore Central",
+                areas: ["Grouse", "Lynn Valley", "North Vancouver"]
+            },
+            {
+                name: "North Shore East",
+                areas: ["Seymour", "Deep Cove"]
+            },
+            {
+                name: "Tri-Cities & Ridge",
+                areas: ["Tri-Cities", "Coquitlam", "Anmore / Buntzen", "Belcarra", "Golden Ears / Maple Ridge"]
+            },
+            {
+                name: "Sea-to-Sky & Pemb.",
+                areas: ["Squamish", "Whistler", "Garibaldi", "Pemberton"]
+            },
+            {
+                name: "Fraser Valley",
+                areas: ["Chilliwack", "Abbotsford", "Mission", "Harrison / Kent", "Fraser Valley"]
+            },
+            {
+                name: "Urban Core",
+                areas: ["Vancouver", "Burnaby", "Surrey", "Delta", "Richmond", "Langley"]
+            }
+        ];
+
+        // Harmonious, adjacent (analogous) color themes clustered by sub-region groups!
+        const areaColors = {
+            // North Shore West
+            "Cypress": "#EF4444",           // Warm Red
+            "West Vancouver": "#F97316",    // Vibrant Orange
+            "Bowen Island": "#F59E0B",      // Amber Gold
+
+            // North Shore Central
+            "Grouse": "#FBBF24",            // Soft Gold
+            "Lynn Valley": "#84CC16",       // Lime Green
+            "North Vancouver": "#10B981",   // Emerald Green
+
+            // North Shore East
+            "Seymour": "#059669",           // Deep Emerald
+            "Deep Cove": "#0D9488",         // Deep Teal
+            
+            // Tri-Cities & Ridge Meadows
+            "Anmore / Buntzen": "#0EA5E9",  // Cyan Blue
+            "Belcarra": "#0891B2",          // Teal Cyan
+            "Coquitlam": "#2563EB",         // Deep Blue
+            "Golden Ears / Maple Ridge": "#1D4ED8",       // Lavender Blue
+
+            // Sea-to-Sky & Pemberton
+            "Squamish": "#8B5CF6",          // Royal Violet
+            "Whistler": "#A855F7",          // True Purple
+            "Garibaldi": "#D946EF",         // Rich Magenta
+            "Pemberton": "#EC4899",         // Dark Rose Pink
+
+            // Fraser Valley East
+            "Chilliwack": "#F43F5E",        // Deep Rose Red
+            "Abbotsford": "#FB7185",        // Soft Rose
+            "Mission": "#FDA4AF",           // Peach Coral
+            "Harrison / Kent": "#FFE4E6",   // Blush Rose
+            "Fraser Valley": "#E11D48",     // Crimson Red
+
+            // Urban Core & Municipal
+            "Vancouver": "#94A3B8",         // Muted Slate Grey
+            "Burnaby": "#CBD5E1",           // Soft Silver
+            "Surrey": "#E2E8F0",            // Platinum
+            "Delta": "#F8FAFC",             // Off-white
+            "Richmond": "#64748B",          // Slate Blue
+            "Langley": "#475569"            // Dark Slate
+        };
+
+        const selectedHikes = new Set();
+        const disabledAreas = new Set(); 
+        let hoveredHike = null;
+        
+        // Explore Filters & Sorting state
+        let searchString = "";
+        let sortBy = "name";
+        let sortAsc = true;
+        const activeFilters = { type: "", distance: "", elevation: "", hypotenuse: "", angle: "", score: "" };
+
+        // Manage Filters & Sorting state
+        let manageSearchString = "";
+        let manageSortBy = "name";
+        let manageSortAsc = true;
+
+        // Canvas Setup
+        const canvas = document.getElementById('vizCanvas');
+        const ctx = canvas.getContext('2d');
+        let scaleX = 1;
+        let scaleY = 1;
+        let originX = 50;
+        let originY = 50;
+        let currentMaxX = 15; // Track max dynamically
+        let currentMaxY = 1.5; // Track max dynamically
+
+        // --- CUSTOM MODAL REPLACEMENT FOR BROWSER ALERTS ---
+        function showMessage(title, text, callback = null) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').textContent = text;
+            
+            const secBtn = document.getElementById('modalSecondaryBtn');
+            secBtn.classList.add('hidden');
+            
+            const priBtn = document.getElementById('modalPrimaryBtn');
+            priBtn.textContent = "OK";
+            priBtn.onclick = () => {
+                closeModal();
+                if (callback) callback();
+            };
+
+            const modal = document.getElementById('customModal');
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.add('opacity-100'), 10);
+        }
+
+        function showConfirm(title, text, confirmCallback, cancelCallback = null) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').textContent = text;
+            
+            const secBtn = document.getElementById('modalSecondaryBtn');
+            secBtn.textContent = "Cancel";
+            secBtn.classList.remove('hidden');
+            secBtn.onclick = () => {
+                closeModal();
+                if (cancelCallback) cancelCallback();
+            };
+            
+            const priBtn = document.getElementById('modalPrimaryBtn');
+            priBtn.textContent = "Yes, Proceed";
+            priBtn.onclick = () => {
+                closeModal();
+                confirmCallback();
+            };
+
+            const modal = document.getElementById('customModal');
+            modal.classList.remove('hidden');
+            setTimeout(() => modal.classList.add('opacity-100'), 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('customModal');
+            modal.classList.remove('opacity-100');
+            setTimeout(() => modal.classList.add('hidden'), 200);
+        }
+
+        // --- UTILITIES ---
+        function getNum(val) {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            return parseFloat(val.toString().replace(/,/g, '').replace(/[^\d.-]/g, ''));
+        }
+
+        function getMetrics(hike) {
+            const dist = getNum(hike.distance); // in km
+            const elev = getNum(hike.elevation) / 1000; // in km
+            const elevMeters = getNum(hike.elevation); // in m
+            
+            // Geometric calculations
+            let hypotenuse = Math.sqrt(Math.pow(dist / 2, 2) + Math.pow(elev, 2));
+            let angle = Math.atan(elev / (dist / 2)) * (180 / Math.PI);
+            hypotenuse = Math.round(hypotenuse * 100) / 100;
+            angle = Math.round(angle * 100) / 100;
+
+            // --- PHYSIOLOGICAL EFFORT INDEX (PEI) FORMULA v2.1 ---
+            const grade = dist > 0 ? (elevMeters / (dist * 500)) : 0;
+            const horizontalEffort = dist * 10.0;
+            const verticalEffort = (elevMeters / 100) * 15.0 * (1.0 + Math.pow(grade, 1.2) * 3.5);
+            const fatigueFactor = 1.0 + 0.008 * Math.pow(dist, 1.5);
+
+            let score = (horizontalEffort + verticalEffort) * fatigueFactor;
+            score = Math.round(score * 10) / 10;
+
+            return { hypotenuse, angle, score };
+        }
+
+        function formatDuration(decimalHours) {
+            if (isNaN(decimalHours) || decimalHours <= 0) return "N/A";
+            const h = Math.floor(decimalHours);
+            const m = Math.round((decimalHours - h) * 60);
+            if (h === 0) return `${m}m`;
+            return `${h}h ${m}m`;
+        }
+
+        function calcMetrics() {
+            const paceMins = parseFloat(document.getElementById('paceMinutes').value) || 0.85;
+            hikes.forEach(hike => {
+                const { hypotenuse, angle, score } = getMetrics(hike);
+                hike.hypotenuse = hypotenuse;
+                hike.angle = angle;
+                hike.score = score;
+                hike.estTime = (score * paceMins) / 60; 
+            });
+        }
+
+        // --- INIT & SETUP ---
+        function initApp() {
+            calcMetrics();
+            
+            populateDropdowns();
+            populateCalibrateSelect();
+            bindEvents();
+            window.addEventListener('resize', resizeCanvas);
+            refreshAllViews();
+        }
+
+        function bindEvents() {
+            // Global toggle buttons for modern filter panel
+            document.getElementById('toggleAllOnBtn').addEventListener('click', () => {
+                disabledAreas.clear();
+                refreshAllViews();
+            });
+
+            document.getElementById('toggleAllOffBtn').addEventListener('click', () => {
+                const activeAreas = new Set(hikes.map(h => h.area));
+                activeAreas.forEach(a => disabledAreas.add(a));
+                selectedHikes.clear(); // Clear plots when everything is disabled
+                refreshAllViews();
+            });
+
+            // Explore Tab Filter changes
+            Object.keys(activeFilters).forEach(key => {
+                document.getElementById(`filter-${key}`).addEventListener('change', (e) => {
+                    activeFilters[key] = e.target.value;
+                    renderList();
+                });
+            });
+
+            // Search input (Explore)
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                searchString = e.target.value.toLowerCase();
+                renderList();
+            });
+
+            // Search input (Manage)
+            document.getElementById('manageSearchInput').addEventListener('input', (e) => {
+                manageSearchString = e.target.value.toLowerCase();
+                renderManageList();
+            });
+
+            // Sort Selector (Explore)
+            document.getElementById('sortSelect').addEventListener('change', (e) => {
+                sortBy = e.target.value;
+                renderList();
+            });
+
+            // Sort Order Button Toggle (Explore)
+            document.getElementById('sortOrderBtn').addEventListener('click', () => {
+                sortAsc = !sortAsc;
+                document.getElementById('sortDirectionIcon').textContent = sortAsc ?  '↓' : '↑';
+                renderList();
+            });
+
+            // Sort Selector (Manage)
+            document.getElementById('manageSortSelect').addEventListener('change', (e) => {
+                manageSortBy = e.target.value;
+                renderManageList();
+            });
+
+            // Sort Order Button Toggle (Manage)
+            document.getElementById('manageSortOrderBtn').addEventListener('click', () => {
+                manageSortAsc = !manageSortAsc;
+                document.getElementById('manageSortDirectionIcon').textContent = manageSortAsc ? '↓' : '↑';
+                renderManageList();
+            });
+
+            // Pace Input changes
+            document.getElementById('paceMinutes').addEventListener('input', () => {
+                calcMetrics();
+                renderList();
+                drawCanvas();
+            });
+
+            // Calibration interactions
+            document.getElementById('calibrateHikeSelect').addEventListener('change', runCalibration);
+            document.getElementById('calibrateHours').addEventListener('input', runCalibration);
+
+            // Form Submit for Add/Edit
+            document.getElementById('trailForm').addEventListener('submit', handleFormSubmit);
+
+            // CSV Imports & Exports
+            document.getElementById('exportCsvBtn').addEventListener('click', exportToCsv);
+            document.getElementById('importCsvFile').addEventListener('change', handleCsvFileSelect);
+        }
+
+        function runCalibration() {
+            const selectedId = document.getElementById('calibrateHikeSelect').value;
+            const hours = parseFloat(document.getElementById('calibrateHours').value);
+            if (!selectedId || isNaN(hours) || hours <= 0) return;
+
+            const hike = hikes.find(h => h.id == selectedId);
+            if (hike && hike.score > 0) {
+                const calculatedPace = (hours * 60) / hike.score;
+                document.getElementById('paceMinutes').value = calculatedPace.toFixed(3);
+                calcMetrics();
+                renderList();
+                drawCanvas();
+            }
+        }
+
+        // --- UI TOGGLING ---
+        function switchTab(tab) {
+            const exploreView = document.getElementById('exploreView');
+            const manageView = document.getElementById('manageView');
+            const tabExplore = document.getElementById('tabExplore');
+            const tabManage = document.getElementById('tabManage');
+
+            if (tab === 'explore') {
+                exploreView.classList.remove('hidden');
+                manageView.classList.add('hidden');
+                
+                tabExplore.classList.add('text-white', 'border-blue-500', 'bg-gray-800');
+                tabExplore.classList.remove('text-gray-400', 'border-transparent');
+                
+                tabManage.classList.remove('text-white', 'border-blue-500', 'bg-gray-800');
+                tabManage.classList.add('text-gray-400', 'border-transparent');
+            } else {
+                exploreView.classList.add('hidden');
+                manageView.classList.remove('hidden');
+                
+                tabManage.classList.add('text-white', 'border-blue-500', 'bg-gray-800');
+                tabManage.classList.remove('text-gray-400', 'border-transparent');
+                
+                tabExplore.classList.remove('text-white', 'border-blue-500', 'bg-gray-800');
+                tabExplore.classList.add('text-gray-400', 'border-transparent');
+            }
+        }
+
+        // --- REGION-GROUPED SELECTION PANEL ---
+        function toggleRegion(regionName) {
+            let targetAreas = [];
+            const region = regions.find(r => r.name === regionName);
+
+            if (region) {
+                targetAreas = region.areas.filter(a => hikes.some(h => h.area === a));
+            } else if (regionName === "Other Regions") {
+                const activeAreas = new Set(hikes.map(h => h.area));
+                const definedAreas = new Set(regions.flatMap(r => r.areas));
+                targetAreas = [...activeAreas].filter(a => !definedAreas.has(a));
+            }
+
+            const allDisabled = targetAreas.every(a => disabledAreas.has(a));
+            if (allDisabled) {
+                // Enable all areas inside this region
+                targetAreas.forEach(a => disabledAreas.delete(a));
+            } else {
+                // Disable all areas inside this region
+                targetAreas.forEach(a => {
+                    disabledAreas.add(a);
+                    selectedHikes.forEach(id => {
+                        const hike = hikes.find(h => h.id === id);
+                        if (hike && hike.area === a) {
+                            selectedHikes.delete(id);
+                        }
+                    });
+                });
+            }
+            refreshAllViews();
+        }
+
+        function renderRegionFilters() {
+            const container = document.getElementById('regionFilters');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const activeAreas = new Set(hikes.map(h => h.area));
+            
+            // Generate active dynamic list
+            const activeRegions = regions.map(r => ({
+                name: r.name,
+                areas: r.areas.filter(a => activeAreas.has(a))
+            })).filter(r => r.areas.length > 0);
+
+            // Handle edge case for newly imported Custom CSV regions
+            const definedAreas = new Set(regions.flatMap(r => r.areas));
+            const otherAreas = [...activeAreas].filter(a => !definedAreas.has(a));
+
+            if (otherAreas.length > 0) {
+                activeRegions.push({
+                    name: "Other Regions",
+                    areas: otherAreas
+                });
+            }
+
+            activeRegions.forEach(reg => {
+                const allActive = reg.areas.filter(a => !disabledAreas.has(a));
+                const isAllEnabled = allActive.length === reg.areas.length;
+                const isAllDisabled = allActive.length === 0;
+
+                let textClass = "text-gray-400 hover:text-white";
+                if (isAllEnabled) textClass = "text-emerald-400 hover:text-emerald-300";
+                else if (!isAllDisabled) textClass = "text-yellow-400 hover:text-yellow-300";
+
+                const card = document.createElement('div');
+                card.className = "bg-gray-900/50 border border-gray-800 rounded p-2 flex flex-col gap-1.5 transition-colors hover:border-gray-700/80";
+
+                // Header toggler button
+                const header = document.createElement('button');
+                header.className = `w-full text-left text-[11px] font-bold uppercase tracking-wider ${textClass} flex justify-between items-center py-0.5 px-1 rounded hover:bg-gray-800 transition-colors`;
+                header.innerHTML = `
+                    <span class="truncate pr-1">${reg.name}</span>
+                    <span class="text-[10px] font-mono shrink-0 bg-gray-800 px-1 py-0.2 rounded text-gray-300">${allActive.length}/${reg.areas.length}</span>
+                `;
+                header.onclick = () => toggleRegion(reg.name);
+                card.appendChild(header);
+
+                // Chips Container
+                const chipsDiv = document.createElement('div');
+                chipsDiv.className = "flex flex-wrap gap-1 mt-0.5";
+
+                reg.areas.forEach(area => {
+                    const isDisabled = disabledAreas.has(area);
+                    const color = areaColors[area] || "#94A3B8";
+
+                    const pill = document.createElement('button');
+                    pill.className = `text-[11px] font-medium px-2.5 py-1 rounded-full flex items-center transition-all ${
+                        isDisabled 
+                        ? 'bg-gray-950/40 text-gray-500 border border-transparent opacity-40 hover:opacity-70 hover:bg-gray-900/40' 
+                        : 'bg-gray-800 text-gray-200 border border-gray-700 hover:bg-gray-700 hover:text-white'
+                    }`;
+
+                    pill.innerHTML = `
+                        <span class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0" style="background-color: ${color}"></span>
+                        <span class="truncate max-w-[120px]">${area}</span>
+                    `;
+
+                    pill.onclick = () => {
+                        if (disabledAreas.has(area)) {
+                            disabledAreas.delete(area);
+                        } else {
+                            disabledAreas.add(area);
+                            // Deselect active plotted lines under disabled area
+                            selectedHikes.forEach(id => {
+                                const hike = hikes.find(h => h.id === id);
+                                if (hike && hike.area === area) {
+                                    selectedHikes.delete(id);
+                                }
+                            });
+                        }
+                        refreshAllViews();
+                    };
+
+                    chipsDiv.appendChild(pill);
+                });
+
+                card.appendChild(chipsDiv);
+                container.appendChild(card);
+            });
+        }
+
+        // --- DATA MANAGEMENT ---
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('trailId').value;
+            const name = document.getElementById('trailName').value;
+            const distanceRaw = document.getElementById('trailDistance').value;
+            const elevationRaw = document.getElementById('trailElevation').value;
+            const area = document.getElementById('trailArea').value;
+            const type = document.getElementById('trailType').value;
+
+            const distance = parseFloat(distanceRaw);
+            const elevation = parseInt(elevationRaw);
+
+            let hikeObj;
+            if (id) {
+                hikeObj = hikes.find(h => h.id == id);
+                if (hikeObj) {
+                    hikeObj.name = name;
+                    hikeObj.distance = distance;
+                    hikeObj.elevation = elevation;
+                    hikeObj.area = area;
+                    hikeObj.type = type;
+                }
+            } else {
+                const newId = hikes.length > 0 ? Math.max(...hikes.map(h => h.id)) + 1 : 1;
+                hikeObj = { id: newId, name, distance, elevation, area, type };
+                hikes.push(hikeObj);
+            }
+
+            calcMetrics();
+            resetForm();
+            refreshAllViews();
+            populateDropdowns(); 
+            populateCalibrateSelect();
+        }
+
+        function editHike(id) {
+            const hike = hikes.find(h => h.id == id);
+            if (!hike) return;
+            
+            document.getElementById('trailId').value = hike.id;
+            document.getElementById('trailName').value = hike.name;
+            document.getElementById('trailDistance').value = hike.distance;
+            document.getElementById('trailElevation').value = hike.elevation;
+            document.getElementById('trailArea').value = hike.area;
+            document.getElementById('trailType').value = hike.type;
+            
+            document.getElementById('formTitle').textContent = "Edit Trail: " + hike.name;
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+            
+            document.getElementById('manageView').scrollTop = 0;
+        }
+
+        function deleteHike(id) {
+            const hike = hikes.find(h => h.id == id);
+            const nameText = hike ? `"${hike.name}"` : 'this trail';
+            showConfirm("Delete Trail", `Are you sure you want to remove ${nameText}?`, () => {
+                const idx = hikes.findIndex(h => h.id == id);
+                if (idx !== -1) {
+                    hikes.splice(idx, 1);
+                    selectedHikes.delete(id);
+                    if (hoveredHike && hoveredHike.id === id) hoveredHike = null;
+                    
+                    if (document.getElementById('trailId').value == id) {
+                        resetForm();
+                    }
+                    
+                    refreshAllViews();
+                    populateDropdowns();
+                    populateCalibrateSelect();
+                }
+            });
+        }
+
+        function resetForm() {
+            document.getElementById('trailForm').reset();
+            document.getElementById('trailId').value = '';
+            document.getElementById('formTitle').textContent = "Add New Trail";
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+        }
+
+        function toggleHike(id) {
+            if (selectedHikes.has(id)) {
+                selectedHikes.delete(id);
+            } else {
+                selectedHikes.add(id);
+            }
+            renderList();
+            drawCanvas(); // Only redraw the canvas, do not recalculate dimensions
+        }
+
+        // --- CSV IMPORT / EXPORT CAPABILITY ---
+        function exportToCsv() {
+            if (hikes.length === 0) {
+                showMessage("No Data", "There are no trails available to export.");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Name,Area,Distance,Elevation,Type\n";
+
+            hikes.forEach(h => {
+                const safeName = h.name.replace(/"/g, '""');
+                const safeArea = h.area.replace(/"/g, '""');
+                const safeType = h.type.replace(/"/g, '""');
+                csvContent += `"${safeName}","${safeArea}",${h.distance},${h.elevation},"${safeType}"\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "vancouver_trails_dataset.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function handleCsvFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const csvData = evt.target.result;
+                parseAndImportCsv(csvData);
+                e.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        function parseAndImportCsv(text) {
+            const lines = text.split(/\r?\n/);
+            if (lines.length <= 1) {
+                showMessage("Import Failed", "The CSV file is empty or formatted incorrectly.");
+                return;
+            }
+
+            function parseCsvLine(line) {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current.trim());
+                return result;
+            }
+
+            const header = parseCsvLine(lines[0]);
+            const nameIdx = header.findIndex(h => h.toLowerCase() === 'name');
+            const areaIdx = header.findIndex(h => h.toLowerCase() === 'area');
+            const distIdx = header.findIndex(h => h.toLowerCase() === 'distance');
+            const elevIdx = header.findIndex(h => h.toLowerCase() === 'elevation');
+            const typeIdx = header.findIndex(h => h.toLowerCase() === 'type');
+
+            if (nameIdx === -1 || areaIdx === -1 || distIdx === -1 || elevIdx === -1 || typeIdx === -1) {
+                showMessage("Import Error", "CSV file must contain columns: Name, Area, Distance, Elevation, and Type.");
+                return;
+            }
+
+            let importCount = 0;
+            let currentMaxId = hikes.length > 0 ? Math.max(...hikes.map(h => h.id)) : 0;
+            const parsedHikes = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i];
+                if (!line.trim()) continue;
+
+                const cols = parseCsvLine(line);
+                if (cols.length < Math.max(nameIdx, areaIdx, distIdx, elevIdx, typeIdx) + 1) continue;
+
+                const rawName = cols[nameIdx];
+                const rawArea = cols[areaIdx];
+                const rawDist = cols[distIdx];
+                const rawElev = cols[elevIdx];
+                const rawType = cols[typeIdx];
+
+                if (!rawName || !rawArea || !rawDist || !rawElev || !rawType) continue;
+
+                const distNum = getNum(rawDist);
+                const elevNum = getNum(rawElev);
+
+                if (isNaN(distNum) || isNaN(elevNum)) continue;
+
+                if (!areaColors[rawArea]) {
+                    areaColors[rawArea] = "#" + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+                }
+
+                currentMaxId += 1;
+                parsedHikes.push({
+                    id: currentMaxId,
+                    name: rawName,
+                    area: rawArea,
+                    distance: distNum,
+                    elevation: elevNum,
+                    type: rawType
+                });
+                importCount += 1;
+            }
+
+            if (parsedHikes.length > 0) {
+                showConfirm("Confirm Import", `Successfully parsed ${importCount} trails. Do you want to append these to your current list, or completely replace them?`, 
+                    () => {
+                        hikes = [...hikes, ...parsedHikes];
+                        finalizeImport();
+                    },
+                    () => {
+                        showConfirm("Replace Dataset", "Would you like to REPLACE your current trail database entirely with this imported file?", () => {
+                            hikes = parsedHikes;
+                            selectedHikes.clear();
+                            finalizeImport();
+                        }, () => {});
+                    }
+                );
+            } else {
+                showMessage("Import Error", "Could not parse any valid trails from the CSV file. Please check column format and data.");
+            }
+        }
+
+        function finalizeImport() {
+            calcMetrics();
+            refreshAllViews();
+            populateDropdowns(); 
+            populateCalibrateSelect();
+            showMessage("Import Completed", "The trail list has been updated successfully.");
+        }
+
+        // --- RENDERING VIEWS ---
+        function refreshAllViews() {
+            renderRegionFilters();
+            renderList();
+            renderManageList();
+            resizeCanvas(); 
+        }
+
+        function populateCalibrateSelect() {
+            const select = document.getElementById('calibrateHikeSelect');
+            const cachedVal = select.value;
+            select.innerHTML = `<option value="">Choose Trail...</option>`;
+            
+            const sortedHikes = [...hikes].sort((a,b) => a.name.localeCompare(b.name));
+            sortedHikes.forEach(hike => {
+                const opt = document.createElement('option');
+                opt.value = hike.id;
+                opt.textContent = hike.name;
+                select.appendChild(opt);
+            });
+            if (cachedVal) select.value = cachedVal;
+        }
+
+        function populateDropdowns() {
+            const categoricalMap = [
+                { key: 'area', ids: ['trailArea'], def: 'Area: All' },
+                { key: 'type', ids: ['filter-type'], def: 'Type: All' }
+            ];
+            
+            const numericalMap = [
+                { key: 'distance', ids: ['filter-distance'], def: 'Distance (km): All' },
+                { key: 'elevation', ids: ['filter-elevation'], def: 'Elevation (m): All' },
+                { key: 'hypotenuse', ids: ['filter-hypotenuse'], def: 'Climb (km): All' },
+                { key: 'angle', ids: ['filter-angle'], def: 'Angle (&deg;): All' },
+                { key: 'score', ids: ['filter-score'], def: 'Effort: All' }  
+            ];
+            
+            categoricalMap.forEach(f => {
+                f.ids.forEach(id => {
+                    const select = document.getElementById(id);
+                    if (!select) return;
+
+                    // Clear options and add default placeholder only for filter dropdowns
+                    select.innerHTML = id.startsWith('filter-') ? `<option value="">${f.def}</option>` : '';
+                    
+                    // Source values: Use the registry for Area to ensure all possible regions are listed
+                    const uniqueVals = (f.key === 'area') 
+                        ? Object.keys(areaColors) 
+                        : [...new Set(hikes.map(h => h[f.key]))];
+
+                    uniqueVals.sort((a, b) => a.toString().localeCompare(b.toString()));
+                    
+                    uniqueVals.forEach(val => {
+                        const option = document.createElement('option');
+                        option.value = val;
+                        option.textContent = val;
+                        select.appendChild(option);
+                    });
+                    
+                    // Restore global filter state for filter elements
+                    if (id.startsWith('filter-') && activeFilters[f.key]) {
+                        select.value = activeFilters[f.key];
+                    }
+                });
+            });
+
+            numericalMap.forEach(f => {
+                if(!f.ids) f.ids = [f.id];
+                f.ids.forEach(id => {
+                    const select = document.getElementById(id);
+                    if (!select) return;
+                    select.innerHTML = `<option value="">${f.def}</option>`;
+                    
+                    if(hikes.length === 0) return;
+
+                    const values = hikes.map(h => getNum(h[f.key]));
+                    const min = Math.min(...values);
+                    const max = Math.max(...values);
+                    const step = max === min ? 1 : (max - min) / 10;
+                    
+                    for (let i = 0; i < 10; i++) {
+                        let rMin = min + i * step;
+                        rMin = Math.floor(rMin);
+                        let rMax = i === 9 ? max : min + (i + 1) * step;
+                        rMax = Math.floor(rMax);
+                        
+                        const option = document.createElement('option');
+                        option.value = JSON.stringify({ min: rMin, max: rMax, isLast: i === 9 });
+                        
+                        const dec = f.key === 'elevation' ? 0 : 1;
+                        option.textContent = `${rMin.toFixed(dec)} - ${rMax.toFixed(dec)}`;
+                        select.appendChild(option);
+                    }
+                    
+                    const currentFilterVal = activeFilters[f.key];
+                    if (currentFilterVal) select.value = currentFilterVal;
+                });
+            });
+        }
+
+        function renderList() {
+            const listEl = document.getElementById('hikeList');
+            listEl.innerHTML = '';
+            document.getElementById('filterCount').textContent = 0;
+            
+            let filterCount = 0;
+            
+            const filteredHikes = hikes.filter(hike => {
+                let match = true;
+                if (disabledAreas.has(hike.area)) return false;
+
+                for (const key in activeFilters) {
+                    if (!activeFilters[key]) continue;
+                    
+                    if (key === 'type') {
+                        if (hike[key].toString() !== activeFilters[key]) {
+                            match = false;
+                            break;
+                        }
+                    } else {
+                        const range = JSON.parse(activeFilters[key]);
+                        const val = getNum(hike[key]);
+                        if (val < range.min || (range.isLast ? val > range.max : val >= range.max)) {
+                            match = false;
+                            break;
+                        }
+                    }
+                }
+                
+                if (searchString && !hike.name.toLowerCase().includes(searchString)) match = false;
+                return match;
+            });
+
+            const modifier = sortAsc ? 1 : -1;
+            filteredHikes.sort((a, b) => {
+                switch (sortBy) {
+                    case 'name':
+                        return modifier * a.name.localeCompare(b.name);
+                    case 'area':
+                        return modifier * a.area.localeCompare(b.area);
+                    case 'distance':
+                        return modifier * (getNum(a.distance) - getNum(b.distance));
+                    case 'elevation':
+                        return modifier * (getNum(a.elevation) - getNum(b.elevation));
+                    case 'angle':
+                        return modifier * (a.angle - b.angle);
+                    case 'score':
+                        return modifier * (a.score - b.score);
+                    case 'time':
+                        return modifier * (a.estTime - b.estTime);
+                    default:
+                        return 0;
+                }
+            });
+
+            filteredHikes.forEach(hike => {
+                const isSelected = selectedHikes.has(hike.id);
+                const div = document.createElement('div');
+                div.className = `p-2 rounded cursor-pointer border-l-4 flex justify-between items-center transition-colors group ${isSelected ? 'bg-gray-700 border-blue-500' : 'bg-gray-800 hover:bg-gray-700/80'}`;
+                div.style.borderLeftColor = isSelected ? '#3B82F6' : (areaColors[hike.area] || "#FFFFFF");
+                
+                div.innerHTML = `
+                    <div class="flex-1 min-w-0 pr-2">
+                        <h3 class="text-xs font-semibold text-white truncate">${hike.name}</h3>
+                        <p class="text-[10px] text-gray-400 truncate mt-0.5">
+                           <span class="inline-block w-2 h-2 rounded-full mr-1 align-middle" style="background-color: ${areaColors[hike.area] || "#FFFFFF"}"></span>
+                           ${hike.area} &bull; ${hike.distance.toFixed(1)} km &bull; ${hike.elevation.toLocaleString()} m
+                        </p>
+                        <p class="text-[10px] text-blue-300 font-medium truncate mt-0.5 flex justify-between">
+                           <span>Effort: <strong class="text-white">${hike.score}</strong></span>
+                           <span class="text-yellow-400">Est: <strong>${formatDuration(hike.estTime)}</strong></span>
+                        </p>
+                    </div>
+                    <input type="checkbox" class="w-4 h-4 rounded cursor-pointer pointer-events-none" ${isSelected ? 'checked' : ''}>
+                `;
+                
+                div.onclick = () => toggleHike(hike.id);
+                div.onmouseenter = () => {
+                    hoveredHike = hike;
+                    drawCanvas();
+                      // Positioning tooltip at line endpoint on the canvas
+                    const rad = hike.angle * Math.PI / 180;
+                    const ex = originX + (hike.hypotenuse * Math.cos(rad)) * scaleX;
+                    const ey = originY - (hike.hypotenuse * Math.sin(rad)) * scaleY - 100;
+                    updateTooltipContent(ex, ey);
+                };
+                div.onmouseleave = () => {
+                    hoveredHike = null;
+                    drawCanvas();
+                    updateTooltipContent();
+                };
+                listEl.appendChild(div);
+                filterCount += 1;
+            });
+
+            document.getElementById('filterCount').textContent = `${filterCount} found`;
+        }
+
+        function renderManageList() {
+            const listEl = document.getElementById('manageHikeList');
+            listEl.innerHTML = '';
+            
+            const filteredHikes = hikes.filter(hike => {
+                if (manageSearchString && !hike.name.toLowerCase().includes(manageSearchString)) {
+                    return false;
+                }
+                return true;
+            });
+
+            document.getElementById('manageFilterCount').textContent = filteredHikes.length;
+
+            if(filteredHikes.length === 0) {
+                listEl.innerHTML = `<p class="text-xs text-gray-500 italic p-4 text-center">No trails match search query.</p>`;
+                return;
+            }
+
+            const modifier = manageSortAsc ? 1 : -1;
+            filteredHikes.sort((a, b) => {
+                switch (manageSortBy) {
+                    case 'name':
+                        return modifier * a.name.localeCompare(b.name);
+                    case 'area':
+                        return modifier * a.area.localeCompare(b.area);
+                    case 'distance':
+                        return modifier * (getNum(a.distance) - getNum(b.distance));
+                    case 'elevation':
+                        return modifier * (getNum(a.elevation) - getNum(b.elevation));
+                    case 'angle':
+                        return modifier * (a.angle - b.angle);
+                    case 'score':
+                        return modifier * (a.score - b.score);
+                    default:
+                        return 0;
+                }
+            });
+
+            filteredHikes.forEach(hike => {
+                const div = document.createElement('div');
+                div.className = `p-2 rounded bg-gray-800 border-l-4 flex justify-between items-center group transition-colors hover:bg-gray-700/60`;
+                div.style.borderLeftColor = areaColors[hike.area] || "#FFFFFF";
+                
+                div.innerHTML = `
+                    <div class="flex-1 min-w-0 pr-2">
+                        <h3 class="text-xs font-semibold text-white truncate">${hike.name}</h3>
+                        <p class="text-[10px] text-gray-400 truncate mt-0.5">
+                           ${hike.area} &bull; ${hike.distance.toFixed(1)} km &bull; ${hike.elevation.toLocaleString()} m &bull; <span class="text-blue-300">Effort: ${hike.score}</span>
+                        </p>
+                    </div>
+                    <div class="flex gap-1.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="editHike(${hike.id})" class="p-1 bg-blue-900/50 hover:bg-blue-600 text-blue-200 hover:text-white rounded transition-colors" title="Edit">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                        </button>
+                        <button onclick="deleteHike(${hike.id})" class="p-1 bg-red-900/50 hover:bg-red-600 text-red-200 hover:text-white rounded transition-colors" title="Delete">
+                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                `;
+                listEl.appendChild(div);
+            });
+        }
+
+        // --- CANVAS LOGIC ---
+        function resizeCanvas() {
+            const parent = canvas.parentElement;
+            const dpr = window.devicePixelRatio || 1;
+            const cw = parent.clientWidth;
+            const ch = parent.clientHeight;
+            
+            canvas.width = cw * dpr;
+            canvas.height = ch * dpr;
+            canvas.style.width = cw + 'px';
+            canvas.style.height = ch + 'px';
+            
+            ctx.setTransform(1, 0, 0, 1, 0, 0); 
+            ctx.scale(dpr, dpr);
+            
+            originX = 60;
+            originY = ch - 50;
+            
+            // Base maximum scale strictly on active areas, NOT individual selected trails
+            const visibleHikes = hikes.filter(h => !disabledAreas.has(h.area));
+            
+            if (visibleHikes.length === 0) {
+                drawCanvas();
+                return;
+            }
+
+            // Set minimum bounding boxes to prevent extreme zooms on short hikes
+            const max_X = Math.max(2.0, ...visibleHikes.map(h => h.hypotenuse * Math.cos(h.angle * Math.PI / 180)));
+            const max_Y = Math.max(0.2, ...visibleHikes.map(h => h.hypotenuse * Math.sin(h.angle * Math.PI / 180)));
+
+            currentMaxX = max_X * 1.05; // 5% inner padding
+            currentMaxY = max_Y * 1.05; 
+            
+            // Define space strictly reserved for labels so they are never cut off
+            const paddingRight = 60; 
+            const paddingTop = 60;   
+            
+            scaleX = Math.max(0.1, cw - originX - paddingRight) / currentMaxX;
+            scaleY = Math.max(0.1, originY - paddingTop) / currentMaxY;
+            
+            drawCanvas();
+        }
+
+        function pointToLineSegmentDistance(px, py, x1, y1, x2, y2) {
+            const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+            if (l2 === 0) return Math.sqrt((px - x1) * (px - x1) + (py - y1) * (py - y1));
+            let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+            t = Math.max(0, Math.min(1, t));
+            const projX = x1 + t * (x2 - x1);
+            const projY = y1 + t * (y2 - y1);
+            return Math.sqrt((px - projX) * (px - projX) + (py - projY) * (py - projY));
+        }
+
+        function drawCanvas() {
+            const cw = canvas.clientWidth;
+            const ch = canvas.clientHeight;
+            
+            ctx.fillStyle = '#111827'; 
+            ctx.fillRect(0, 0, cw, ch);
+            
+            drawAxes();
+            
+            if(hikes.length === 0) return;
+
+            // 1. Unselected Lines (opacity 0.2)
+            hikes.forEach(hike => {
+                if (disabledAreas.has(hike.area)) return;
+                if (!selectedHikes.has(hike.id)) drawLine(hike, 0.2);
+            });
+            
+            // 2. Selected Lines (opacity 1.0)
+            hikes.forEach(hike => {
+                if (disabledAreas.has(hike.area)) return;
+                if (selectedHikes.has(hike.id)) drawLine(hike, 1.0);
+            });
+            
+            // 3. Hovered Line (glows on top)
+            if (hoveredHike && !disabledAreas.has(hoveredHike.area)) {
+                drawLine(hoveredHike, 1.0, true);
+            }
+            
+            // 4. Labels for Selected Hikes
+            ctx.textBaseline = "middle";
+            ctx.font = "bold 11px Inter, sans-serif";
+            hikes.forEach(hike => {
+                if (disabledAreas.has(hike.area)) return;
+                if (selectedHikes.has(hike.id)) {
+                    const rad = hike.angle * Math.PI / 180;
+                    const endX = originX + (hike.hypotenuse * Math.cos(rad)) * scaleX;
+                    const endY = originY - (hike.hypotenuse * Math.sin(rad)) * scaleY;
+                    
+                    const labelText = `${hike.name}: ${hike.score}, ${hike.estTime.toFixed(1)}h`;
+                    
+                    let labelX = endX + 8;
+                    const textWidth = ctx.measureText(labelText).width;
+                    if (labelX + textWidth > cw - 10) {
+                        ctx.textAlign = "right";
+                        labelX = endX - 8;
+                    } else {
+                        ctx.textAlign = "left";
+                    }
+                    
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = "#111827";
+                    ctx.strokeText(labelText, labelX, endY);
+                    
+                    ctx.fillStyle = areaColors[hike.area] || "#FFFFFF";
+                    ctx.fillText(labelText, labelX, endY);
+                }
+            });
+        }
+
+        function drawAxes() {
+            const yAxisTop = originY - (currentMaxY * scaleY);
+            const xAxisRight = originX + (currentMaxX * scaleX);
+
+            ctx.beginPath();
+            ctx.moveTo(originX, originY);
+            ctx.lineTo(xAxisRight, originY);
+            ctx.moveTo(originX, originY);
+            ctx.lineTo(originX, yAxisTop);
+            
+            ctx.strokeStyle = "#4B5563"; 
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Y Ticks dynamically adapting to elevation range
+            ctx.fillStyle = "#9CA3AF";
+            ctx.textAlign = "right";
+            ctx.textBaseline = "middle";
+            
+            let stepY = 0.5;
+            if (currentMaxY <= 0.5) stepY = 0.1;
+            else if (currentMaxY <= 1.5) stepY = 0.25;
+            else if (currentMaxY <= 3.0) stepY = 0.5;
+            else stepY = 1.0;
+
+            ctx.font = "10px Inter, sans-serif";
+            for (let e = stepY; e <= currentMaxY; e += stepY) {
+                const tickY = originY - (e * scaleY);
+                
+                ctx.strokeStyle = "#4B5563";
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.moveTo(originX - 5, tickY);
+                ctx.lineTo(originX, tickY);
+                ctx.stroke();
+                
+                ctx.fillText(e.toFixed(2).replace(/\.00$/, '') + "km", originX - 10, tickY);
+            }
+            
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.font = "12px Inter, sans-serif";
+            ctx.fillText("Elevation (km)", originX, yAxisTop - 25);
+            
+            // X Ticks dynamically adapting to distance range
+            let stepX = 5;
+            if (currentMaxX <= 3) stepX = 0.5;
+            else if (currentMaxX <= 8) stepX = 1;
+            else if (currentMaxX <= 15) stepX = 2;
+            else if (currentMaxX <= 30) stepX = 5;
+            else stepX = 10;
+
+            ctx.font = "10px Inter, sans-serif";
+            ctx.textBaseline = "top";
+            
+            for (let x = stepX; x <= currentMaxX; x += stepX) {
+                const px = originX + (x * scaleX);
+                
+                // Axis ticks
+                ctx.strokeStyle = "#4B5563";
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.moveTo(px, originY);
+                ctx.lineTo(px, originY + 5);
+                ctx.stroke();
+                
+                ctx.fillText(x.toFixed(1).replace(/\.0$/, '') + "km", px, originY + 10);
+                
+                // Vertical distance grid markers
+                ctx.strokeStyle = "rgba(75, 85, 99, 0.4)"; 
+                ctx.setLineDash([4, 6]);
+                ctx.beginPath();
+                ctx.moveTo(px, originY);
+                ctx.lineTo(px, yAxisTop);
+                ctx.stroke();
+            }
+            
+            ctx.strokeStyle = "#4B5563";
+            ctx.setLineDash([]);
+            ctx.font = "12px Inter, sans-serif";
+            ctx.fillText("Distance (km)", originX + ((currentMaxX * scaleX) / 2), originY + 30);
+            
+            ctx.textAlign = "left"; 
+            ctx.textBaseline = "middle";
+            
+            // Angle Rays
+            [5, 10, 15, 20, 30, 45].forEach(deg => {
+                const rad = deg * Math.PI / 180;
+                
+                // Ray length dynamically scaled to exactly hit the bounding box
+                let r_bound = currentMaxX / Math.cos(rad);
+                if (r_bound * Math.sin(rad) > currentMaxY) {
+                    r_bound = currentMaxY / Math.sin(rad);
+                }
+                
+                const endX = originX + r_bound * Math.cos(rad) * scaleX;
+                const endY = originY - r_bound * Math.sin(rad) * scaleY;
+
+                ctx.strokeStyle = "rgba(75, 85, 99, 0.5)";
+                ctx.setLineDash([2, 4]);
+                ctx.beginPath();
+                ctx.moveTo(originX, originY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+
+                // Labels gracefully offset without risking canvas cut-offs due to bounds
+                const labelX = endX + (Math.cos(rad) * 8);
+                const labelY = endY - (Math.sin(rad) * 8);
+                ctx.fillStyle = "#6B7280";
+                ctx.fillText(deg + "°", labelX, labelY);
+            });
+
+            ctx.setLineDash([]);
+        }
+
+        function drawLine(hike, opacity, isHovered = false) {
+            const rad = hike.angle * Math.PI / 180;
+            const endX = originX + (hike.hypotenuse * Math.cos(rad)) * scaleX;
+            const endY = originY - (hike.hypotenuse * Math.sin(rad)) * scaleY;
+            
+            ctx.beginPath();
+            ctx.moveTo(originX, originY);
+            ctx.lineTo(endX, endY);
+            
+            ctx.strokeStyle = areaColors[hike.area] || "#FFFFFF";
+            ctx.globalAlpha = opacity;
+            ctx.lineWidth = isHovered ? 5 : (opacity === 1.0 ? 3 : 1.5);
+            ctx.lineCap = "round";
+            
+            if (isHovered || opacity === 1.0) {
+                ctx.shadowBlur = isHovered ? 15 : 8;
+                ctx.shadowColor = ctx.strokeStyle;
+            } else {
+                ctx.shadowBlur = 0;
+            }
+            
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.arc(endX, endY, isHovered ? 6 : (opacity === 1.0 ? 4 : 2), 0, Math.PI * 2);
+            ctx.fillStyle = areaColors[hike.area] || "#FFFFFF";
+            ctx.fill();
+            
+            ctx.globalAlpha = 1.0; 
+            ctx.shadowBlur = 0;
+        }
+
+        // --- INTERACTIONS ---
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            let candidates = [];
+            
+            hikes.forEach(hike => {
+                if (disabledAreas.has(hike.area)) return;
+                const rad = hike.angle * Math.PI / 180;
+                const lx = originX + (hike.hypotenuse * Math.cos(rad)) * scaleX;
+                const ly = originY - (hike.hypotenuse * Math.sin(rad)) * scaleY;
+                
+                const dist = pointToLineSegmentDistance(mouseX, mouseY, originX, originY, lx, ly);
+                if (dist < 12) {
+                    candidates.push({ hike, dist });
+                }
+            });
+            
+            let closestHike = null;
+            if (candidates.length > 0) {
+                candidates.sort((a, b) => {
+                    const aSel = selectedHikes.has(a.hike.id);
+                    const bSel = selectedHikes.has(b.hike.id);
+                    if (aSel && !bSel) return -1;
+                    if (!aSel && bSel) return 1;
+                    return a.dist - b.dist;
+                });
+                closestHike = candidates[0].hike;
+            }
+            
+            if (closestHike !== hoveredHike) {
+                hoveredHike = closestHike;
+                drawCanvas();
+                updateTooltipContent(mouseX, mouseY);
+            } else if (hoveredHike) {
+                updateTooltipPosition(mouseX, mouseY);
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            hoveredHike = null;
+            drawCanvas();
+            document.getElementById('tooltip').style.opacity = 0;
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (hoveredHike) {
+                toggleHike(hoveredHike.id);
+            }
+        });
+
+        // Touch event support for mobile canvas interaction
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) {
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.touches[0].clientX - rect.left;
+                const mouseY = e.touches[0].clientY - rect.top;
+                
+                let candidates = [];
+                hikes.forEach(hike => {
+                    if (disabledAreas.has(hike.area)) return;
+                    const rad = hike.angle * Math.PI / 180;
+                    const lx = originX + (hike.hypotenuse * Math.cos(rad)) * scaleX;
+                    const ly = originY - (hike.hypotenuse * Math.sin(rad)) * scaleY;
+                    const dist = pointToLineSegmentDistance(mouseX, mouseY, originX, originY, lx, ly);
+                    if (dist < 20) {
+                        candidates.push(hike);
+                    }
+                });
+
+                if (candidates.length > 0) {
+                    toggleHike(candidates[0].id);
+                }
+            }
+        });
+
+        function updateTooltipContent(x, y) {
+            const tt = document.getElementById('tooltip');
+            if (!hoveredHike) {
+                tt.style.opacity = 0;
+                return;
+            }
+            
+            tt.innerHTML = `
+                <div class="font-bold text-white flex items-center gap-2 mb-1">
+                    <span class="w-3 h-3 rounded-full shadow-sm" style="background-color: ${areaColors[hoveredHike.area] || '#FFF'}"></span>
+                    ${hoveredHike.name}
+                </div>
+                <div class="text-xs text-gray-300"><b>Area:</b> ${hoveredHike.area}</div>
+                <div class="text-xs text-gray-300"><b>Type:</b> ${hoveredHike.type}</div>
+                <div class="text-xs text-gray-300 mt-1"><b>Hypotenuse:</b> <span class="text-blue-300">${hoveredHike.hypotenuse} km</span></div>
+                <div class="text-xs text-gray-300"><b>Angle:</b> <span class="text-red-300">${hoveredHike.angle}&deg;</span></div>
+                <div class="text-xs text-yellow-300 font-semibold mt-1"><b>Est. Duration:</b> ${formatDuration(hoveredHike.estTime)}</div>
+                <div class="text-xs text-gray-400 mt-2 border-t border-gray-600 pt-2 flex justify-between gap-4">
+                    <span>${hoveredHike.distance.toFixed(1)} km RT</span>
+                    <span>${hoveredHike.elevation.toLocaleString()} m Gain</span>
+                    <span>Effort: ${hoveredHike.score}</span>
+                </div>
+            `;
+            tt.style.opacity = 1;
+            updateTooltipPosition(x, y);
+        }
+
+        function updateTooltipPosition(x, y) {
+            const tt = document.getElementById('tooltip');
+            let ttX = x + 15;
+            let ttY = y + 15;
+            
+            if (ttX + 220 > canvas.clientWidth) ttX = x - 235; 
+            if (ttY + 120 > canvas.clientHeight) ttY = y - 135; 
+            
+            tt.style.left = ttX + 'px';
+            tt.style.top = ttY + 'px';
+        }
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'Vancouver_Hike_Comparison.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+
+        // Initialize application on load
+        window.onload = initApp;
+    </script>
+</body>
+</html>
